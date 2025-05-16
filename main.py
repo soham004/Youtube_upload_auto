@@ -152,12 +152,30 @@ def main():
     # Initialize the driver
     driver = Driver(uc=True, headless=False, chromium_arg=chrome_options)
     driver.maximize_window()
-    upload_file = os.path.abspath("test.mp4")
-    try:
-        execute_upload_sequence(driver, upload_file, None)
-        print(driver.title)
-    except Exception as e:
-        traceback.print_exc()
+
+
+    thumbnail_file_path = config.get("thumbnail_path", None)
+    thumbnail_file_path_absolute = None
+
+    if thumbnail_file_path is not None:
+        thumbnail_file_path_absolute = os.path.abspath(thumbnail_file_path)
+        if not os.path.exists(thumbnail_file_path_absolute):
+            print(f"Thumbnail file not found: {thumbnail_file_path_absolute}")
+            thumbnail_file_path_absolute = None
+    
+    video_files = [f for f in os.listdir(os.getcwd()) if f.endswith(('.mp4', '.avi', '.mov', '.mkv','.mpg','.wmv'))]
+    if not video_files:
+        print("No video files found in the current folder.")
+        sys.exit(1)
+    
+    for video_file in video_files:
+        upload_file = os.path.abspath(video_file)
+        try:
+            execute_upload_sequence(driver, upload_file, thumbnail_file_path_absolute)
+            print(driver.title)
+        except Exception as e:
+            traceback.print_exc()
+    
     input("Press any key to exit ...")
     driver.quit()
     
