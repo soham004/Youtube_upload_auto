@@ -112,16 +112,20 @@ def wait_for_video_publish(driver:webdriver.Chrome):
         time.sleep(5)
 
 def execute_upload_sequence(driver:webdriver.Chrome, video_file_path_absolute:str, thumbnail_file_path_absolute:Optional[str]):
-    driver.get("https://studio.youtube.com/")
-    print("Waiting 10 secs to detect login page")
-    try:
-        # Wait for the page to load
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//input[@type='email']")))
-        input("Login page opened,\nPlease login and ADD THE ACCOUNT TO CHROME \nPress enter to continue ...")
-    except TimeoutException:
-        print("Login page not detected, continuing ...")
-    WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//ytcp-icon-button[@id='upload-icon']")))
-    start_video_upload(driver, video_file_path_absolute)
+    while True:
+        try:
+            driver.get("https://studio.youtube.com/")
+            print("Waiting 10 secs to detect login page")
+            try:
+                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//input[@type='email']")))
+                input("Login page opened,\nPlease login and ADD THE ACCOUNT TO CHROME \nPress enter to continue ...")
+            except TimeoutException:
+                print("Login page not detected, continuing ...")
+            WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//ytcp-icon-button[@id='upload-icon']")))
+            start_video_upload(driver, video_file_path_absolute)
+            break
+        except Exception as e:
+            pass
     
     enter_description(driver)
 
