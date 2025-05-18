@@ -1,4 +1,5 @@
 {
     "video_description":"This is a test description",
-    "thumbnail_image_filename":"thumbnail.jpg"
+    "thumbnail_image_filename":"thumbnail.jpg",
+    "wait_time_in_mins":5
 }

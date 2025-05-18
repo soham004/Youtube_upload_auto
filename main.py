@@ -11,7 +11,9 @@ import sys
 import time
 import json
 import os
+import errno
 import traceback
+import msvcrt
 
 """
 TODO:
@@ -23,9 +25,29 @@ TODO:
 try:
     with open("config.json", "r") as f:
         config = json.load(f)
+    thumbnail_file_path = config.get("thumbnail_image_filename", None)
+    if thumbnail_file_path == "":
+        thumbnail_file_path = None
+    description = config.get("video_description", "")
+    if description == "":
+        description = None
+    wait_time_in_mins = int(config["wait_time_in_mins"])
+    
+    
 except FileNotFoundError:
     print("Config file not found. Please create a config.json file.")
     sys.exit(1)
+
+def is_file_open(file_path):
+    try:
+        with open(file_path, 'r+') as file:
+            return False  # File is not open by another program
+    except IOError as e:
+        if e.errno == errno.EACCES or e.errno == errno.EBUSY:
+            return True
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return True
 
 def mouse_click(driver:webdriver.Chrome, element):
     # Move to the element and click
@@ -55,7 +77,6 @@ def enter_description(driver:webdriver.Chrome):
     time.sleep(.5)
 
     # Enter the description
-    description = config.get("video_description", "")
     if description:
         description_box.send_keys(description)
         time.sleep(.5)
@@ -143,9 +164,29 @@ def execute_upload_sequence(driver:webdriver.Chrome, video_file_path_absolute:st
 
     wait_for_video_publish(driver)
 
+def wait_for_input(timeout_in_seconds):
+    """Waits for Enter key press with a timeout while displaying a countdown (Windows version)."""
+    start_time = time.time()
+    while True:
+        remaining_time = timeout_in_seconds - (time.time() - start_time)
+        if remaining_time <= 0:
+            print("\nTime's up!.")
+            return False  # Timeout reached
+        mins, secs = divmod(remaining_time, 60)
+        sys.stdout.write("\rTime left for next check: {:02d}:{:02d}. Press Enter to check for files now... ".format(int(mins), int(secs)) )
+        sys.stdout.flush()
 
+        # Check if a key was pressed
+        if msvcrt.kbhit():
+            key = msvcrt.getch()
+            if key == b'\r':  # Enter key is detected
+                print("\nUser pressed Enter!")
+                return True  # Input received
+
+        time.sleep(0.1)  # Reduce CPU usage
 
 def main():
+
     user_data_dir = os.path.join(os.getcwd(), "chrome_profile")
     profile_dir = "Default"
     
@@ -154,11 +195,7 @@ def main():
         f"--profile-directory={profile_dir}",
     ]
     # Initialize the driver
-    driver = Driver(uc=True, headless=False, chromium_arg=chrome_options)
-    driver.maximize_window()
-
-
-    thumbnail_file_path = config.get("thumbnail_path", None)
+    
     thumbnail_file_path_absolute = None
 
     if thumbnail_file_path is not None:
@@ -166,22 +203,33 @@ def main():
         if not os.path.exists(thumbnail_file_path_absolute):
             print(f"Thumbnail file not found: {thumbnail_file_path_absolute}")
             thumbnail_file_path_absolute = None
-    
-    video_files = [f for f in os.listdir(os.getcwd()) if f.endswith(('.mp4', '.avi', '.mov', '.mkv','.mpg','.wmv'))]
-    if not video_files:
-        print("No video files found in the current folder.")
-        sys.exit(1)
-    
-    for video_file in video_files:
-        upload_file = os.path.abspath(video_file)
-        try:
-            execute_upload_sequence(driver, upload_file, thumbnail_file_path_absolute)
-            print(driver.title)
-        except Exception as e:
-            traceback.print_exc()
-    
-    input("Press any key to exit ...")
-    driver.quit()
+
+    while True:
+        wait_for_input(wait_time_in_mins * 60)
+        video_files = [f for f in os.listdir(os.getcwd()) if (f.endswith(('.mp4', '.avi', '.mov', '.mkv','.mpg','.wmv')) and not is_file_open(f))]
+        if not video_files:
+            print("No video files found in the current folder.")
+            continue
+        else:
+            print(f"Found {len(video_files)} video files in the current folder.")
+            for video_file in video_files:
+                print(f"Video file: {video_file}")
+        driver = Driver(uc=True, headless=False, chromium_arg=chrome_options)
+        driver.maximize_window()
+        if not video_files:
+            print("No video files found in the current folder.")
+            sys.exit(1)
+        
+        for video_file in video_files:
+            upload_file = os.path.abspath(video_file)
+            try:
+                execute_upload_sequence(driver, upload_file, thumbnail_file_path_absolute)
+                print(f"Video file {video_file} uploaded successfully.")
+                os.remove(upload_file)
+                print(f"Video file {video_file} deleted successfully.")
+            except Exception as e:
+                traceback.print_exc()
+        driver.quit()
     
 
 if __name__ == "__main__":
