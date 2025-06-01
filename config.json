@@ -1,5 +1,5 @@
 {
-    "video_description":"This is a test description",
     "thumbnail_image_filename":"thumbnail.jpg",
+    "description_content_filename":"desc.txt",
     "wait_time_in_mins":5
 }

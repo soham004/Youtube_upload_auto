@@ -1,3 +1,4 @@
+import pyperclip
 from seleniumbase import Driver
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
@@ -28,9 +29,9 @@ try:
     thumbnail_file_path = config.get("thumbnail_image_filename", None)
     if thumbnail_file_path == "":
         thumbnail_file_path = None
-    description = config.get("video_description", "")
-    if description == "":
-        description = None
+    description_content_filename = config.get("description_content_filename", "")
+    if description_content_filename == "":
+        description_content_filename = None
     wait_time_in_mins = int(config["wait_time_in_mins"])
     
     
@@ -69,16 +70,29 @@ def start_video_upload(driver:webdriver.Chrome,video_file_path_absolute:str):
 
 def enter_description(driver:webdriver.Chrome):
     # Click on the description box
-    description_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//div[contains(@aria-label, 'about your video')]")))
+    description_box = WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, "//*[contains(@aria-label, 'about your video')]")))
     mouse_click(driver, description_box)
     time.sleep(.5)
 
     ActionChains(driver).key_down(Keys.CONTROL).send_keys('a').key_up(Keys.CONTROL).send_keys(Keys.DELETE).perform()
     time.sleep(.5)
 
+    try:
+        if description_content_filename is None:
+            raise FileNotFoundError("Description content filename is not specified in config.json")
+        description_file = open(description_content_filename, mode="r", encoding="utf-8")
+        description = description_file.read()
+        description_file.close()
+    except FileNotFoundError:
+        print(f"Description file not found: {description_content_filename}")
+        print("Please create a description file with the name specified in config.json")
+        print("Using empty description instead.")
+        description = " "
+        
     # Enter the description
     if description:
-        description_box.send_keys(description)
+        pyperclip.copy(description)  # Copy the description to clipboard
+        description_box.send_keys(Keys.CONTROL + 'v') # Paste the description
         time.sleep(.5)
 
 
@@ -108,6 +122,10 @@ def set_unlisted_visibility(driver:webdriver.Chrome):
 
 
 def save_video(driver:webdriver.Chrome):
+
+    visibility_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@id="step-badge-3"]')))
+    mouse_click(driver, visibility_button)
+    time.sleep(.5)
     # Click on the "Save" button
     save_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@aria-label="Save"]')))
     mouse_click(driver, save_button)
@@ -132,23 +150,19 @@ def wait_for_video_publish(driver:webdriver.Chrome):
         print("Waiting for video to be published ...")
         time.sleep(5)
 
-def execute_upload_sequence(driver:webdriver.Chrome, video_file_path_absolute:str, thumbnail_file_path_absolute:Optional[str]):
+def execute_upload_sequence(driver:webdriver.Chrome, video_file_path_absolute:str, thumbnail_file_path_absolute:Optional[str], full_sequence:bool=False):
     while True:
+        driver.get("https://studio.youtube.com/")
         try:
-            driver.get("https://studio.youtube.com/")
-            print("Waiting 10 secs to detect login page")
-            try:
-                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//input[@type='email']")))
-                input("Login page opened,\nPlease login and ADD THE ACCOUNT TO CHROME \nPress enter to continue ...")
-            except TimeoutException:
-                print("Login page not detected, continuing ...")
             WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//ytcp-icon-button[@id='upload-icon']")))
             start_video_upload(driver, video_file_path_absolute)
             break
         except Exception as e:
-            pass
+            print("Upload button not found. Retrying in 5 seconds...")
+            time.sleep(5)
     
-    enter_description(driver)
+    if full_sequence:
+        enter_description(driver)
 
     if thumbnail_file_path_absolute is not None:
         # Click on the thumbnail button
@@ -157,7 +171,8 @@ def execute_upload_sequence(driver:webdriver.Chrome, video_file_path_absolute:st
 
     mark_video_as_not_made_for_kids(driver)
 
-    set_unlisted_visibility(driver)
+    if full_sequence:
+        set_unlisted_visibility(driver)
 
     time.sleep(1)
     save_video(driver)
@@ -185,6 +200,52 @@ def wait_for_input(timeout_in_seconds):
 
         time.sleep(0.1)  # Reduce CPU usage
 
+def setup_upload_settings_on_youtube(driver:webdriver.Chrome) -> bool:
+    for i in range(3):
+        driver.get("https://studio.youtube.com/")
+        print("Waiting 10 secs to detect login page")
+        try:
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//input[@type='email']")))
+            input("Login page opened\nPlease login and ADD THE ACCOUNT TO CHROME \nPress enter to continue ...")
+        except TimeoutException:
+            print("Login page not detected, continuing ...")
+
+        try:
+            settings_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//tp-yt-paper-icon-item[@id="settings-item"]')))
+            mouse_click(driver, settings_button)
+        except TimeoutException:
+            print("Settings button not found. Please ensure you are logged in to YouTube Studio.")
+            return False
+        
+        try:
+            upload_defaults_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//span[contains(text(),"Upload defaults")]/parent::li/parent::ytcp-ve')))
+            mouse_click(driver, upload_defaults_button)
+            enter_description(driver)
+            visibility_selection = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//ytcp-form-select[@id="privacy-select"]')))
+            time.sleep(.5)
+            mouse_click(driver, visibility_selection)
+            unlised_option = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//tp-yt-paper-item[@test-id="VIDEO_PRIVACY_UNLISTED"]')))
+            time.sleep(.5)
+            mouse_click(driver, unlised_option)
+            break
+        except TimeoutException:
+            print("Upload defaults button not found retrying ...")
+            if i == 2:
+                print("Failed to find upload defaults button after 3 attempts. Exiting.")
+                return False
+            continue
+
+    try:
+        save_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@aria-label="Save"]')))
+        mouse_click(driver, save_button)
+        print("Upload defaults saved successfully.")
+        return True
+    except TimeoutException:
+        print("Save button not clickable. No changes made.")
+        close_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@aria-label="Close"]')))
+        mouse_click(driver, close_button)
+        return False
+
 def main():
 
     user_data_dir = os.path.join(os.getcwd(), "chrome_profile")
@@ -195,7 +256,10 @@ def main():
         f"--profile-directory={profile_dir}",
     ]
     # Initialize the driver
-    
+    driver = Driver(uc=True, headless=False, chromium_arg=chrome_options)
+    execute_full_sequence = not setup_upload_settings_on_youtube(driver)
+    driver.quit()
+
     thumbnail_file_path_absolute = None
 
     if thumbnail_file_path is not None:
@@ -223,14 +287,14 @@ def main():
         for video_file in video_files:
             upload_file = os.path.abspath(video_file)
             try:
-                execute_upload_sequence(driver, upload_file, thumbnail_file_path_absolute)
+                execute_upload_sequence(driver, upload_file, thumbnail_file_path_absolute, full_sequence=execute_full_sequence)
                 print(f"Video file {video_file} uploaded successfully.")
                 os.remove(upload_file)
                 print(f"Video file {video_file} deleted successfully.")
             except Exception as e:
                 traceback.print_exc()
         driver.quit()
-    
+        print("All video files processed. Waiting for next check...")
 
 if __name__ == "__main__":
     main()
