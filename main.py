@@ -16,13 +16,6 @@ import errno
 import traceback
 import msvcrt
 
-"""
-TODO:
-- Add a config file to set the thumbnail path
-- Make it go through all the videos in current folder
-- Delete the video after upload
-"""
-
 try:
     with open("config.json", "r") as f:
         config = json.load(f)
@@ -33,6 +26,7 @@ try:
     if description_content_filename == "":
         description_content_filename = None
     wait_time_in_mins = int(config["wait_time_in_mins"])
+    video_has_altered_content = config.get("video_has_altered_content", None)
     
     
 except FileNotFoundError:
@@ -168,8 +162,23 @@ def execute_upload_sequence(driver:webdriver.Chrome, video_file_path_absolute:st
         # Click on the thumbnail button
         upload_thumbnail(driver, thumbnail_file_path_absolute)
         time.sleep(1)
-
+    
     mark_video_as_not_made_for_kids(driver)
+
+    
+    if video_has_altered_content is not None:
+        show_more_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@aria-label="Show advanced settings"]')))
+        ActionChains(driver).scroll_to_element(show_more_button).perform()
+        show_more_button.click()
+        time.sleep(1)
+        if video_has_altered_content:
+            altered_content_radio_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//tp-yt-paper-radio-button[@name="VIDEO_HAS_ALTERED_CONTENT_YES"]')))
+        else:
+            altered_content_radio_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//tp-yt-paper-radio-button[@name="VIDEO_HAS_ALTERED_CONTENT_NO"]')))
+        ActionChains(driver).scroll_to_element(altered_content_radio_button).perform()
+        mouse_click(driver, altered_content_radio_button)
+        time.sleep(1)
+
 
     if full_sequence:
         set_unlisted_visibility(driver)
@@ -247,7 +256,7 @@ def setup_upload_settings_on_youtube(driver:webdriver.Chrome) -> bool:
         return False
 
 def main():
-
+    print("Running startup sequence ...")
     user_data_dir = os.path.join(os.getcwd(), "chrome_profile")
     profile_dir = "Default"
     
@@ -278,22 +287,24 @@ def main():
             print(f"Found {len(video_files)} video files in the current folder.")
             for video_file in video_files:
                 print(f"Video file: {video_file}")
-        driver = Driver(uc=True, headless=False, chromium_arg=chrome_options)
-        driver.maximize_window()
-        if not video_files:
-            print("No video files found in the current folder.")
-            sys.exit(1)
-        
-        for video_file in video_files:
-            upload_file = os.path.abspath(video_file)
-            try:
-                execute_upload_sequence(driver, upload_file, thumbnail_file_path_absolute, full_sequence=execute_full_sequence)
-                print(f"Video file {video_file} uploaded successfully.")
-                os.remove(upload_file)
-                print(f"Video file {video_file} deleted successfully.")
-            except Exception as e:
-                traceback.print_exc()
-        driver.quit()
+        try:
+            driver = Driver(uc=True, headless=False, chromium_arg=chrome_options)
+            driver.maximize_window()            
+            for video_file in video_files:
+                upload_file = os.path.abspath(video_file)
+                try:
+                    execute_upload_sequence(driver, upload_file, thumbnail_file_path_absolute, full_sequence=execute_full_sequence)
+                    print(f"Video file {video_file} uploaded successfully.")
+                    os.remove(upload_file)
+                    print(f"Video file {video_file} deleted successfully.")
+                except Exception as e:
+                    traceback.print_exc()
+            driver.quit()
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            print("Retrying with a new driver instance during next check...")
+            traceback.print_exc()
+            driver.quit()
         print("All video files processed. Waiting for next check...")
 
 if __name__ == "__main__":
