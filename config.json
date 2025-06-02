@@ -2,5 +2,6 @@
     "thumbnail_image_filename":"thumbnail.jpg",
     "description_content_filename":"desc.txt",
     "wait_time_in_mins":5,
-    "video_has_altered_content":true
+    "video_has_altered_content":true,
+    "turn_monetization_on":true
 }

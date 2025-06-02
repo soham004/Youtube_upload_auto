@@ -27,6 +27,7 @@ try:
         description_content_filename = None
     wait_time_in_mins = int(config["wait_time_in_mins"])
     video_has_altered_content = config.get("video_has_altered_content", None)
+    turn_monetization_on = config.get("turn_monetization_on", True)
     
     
 except FileNotFoundError:
@@ -63,12 +64,15 @@ def start_video_upload(driver:webdriver.Chrome,video_file_path_absolute:str):
 
 
 def enter_description(driver:webdriver.Chrome):
+
+    if description_content_filename is None:
+        print("Description content filename is not specified in config.json")
+        print("Not making any changes")
+        return
+
     # Click on the description box
     description_box = WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, "//*[contains(@aria-label, 'about your video')]")))
     mouse_click(driver, description_box)
-    time.sleep(.5)
-
-    ActionChains(driver).key_down(Keys.CONTROL).send_keys('a').key_up(Keys.CONTROL).send_keys(Keys.DELETE).perform()
     time.sleep(.5)
 
     try:
@@ -77,12 +81,13 @@ def enter_description(driver:webdriver.Chrome):
         description_file = open(description_content_filename, mode="r", encoding="utf-8")
         description = description_file.read()
         description_file.close()
+        ActionChains(driver).key_down(Keys.CONTROL).send_keys('a').key_up(Keys.CONTROL).send_keys(Keys.DELETE).perform()
+        time.sleep(.5)
     except FileNotFoundError:
         print(f"Description file not found: {description_content_filename}")
         print("Please create a description file with the name specified in config.json")
-        print("Using empty description instead.")
-        description = " "
-        
+        print("No making any changes")
+        description = None
     # Enter the description
     if description:
         pyperclip.copy(description)  # Copy the description to clipboard
@@ -106,24 +111,27 @@ def mark_video_as_not_made_for_kids(driver:webdriver.Chrome):
     time.sleep(.5)
 
 def set_unlisted_visibility(driver:webdriver.Chrome):
-    visibility_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@id="step-badge-3"]')))
-    mouse_click(driver, visibility_button)
-    time.sleep(.5)
     # Click on the "Unlisted" radio button
     unlisted_radio_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//tp-yt-paper-radio-button[@name='UNLISTED']/div[@id='radioContainer']")))
+    ActionChains(driver).scroll_to_element(unlisted_radio_button).perform()
     mouse_click(driver, unlisted_radio_button)
     time.sleep(.5)
 
 
 def save_video(driver:webdriver.Chrome):
 
-    visibility_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@id="step-badge-3"]')))
-    mouse_click(driver, visibility_button)
-    time.sleep(.5)
     # Click on the "Save" button
     save_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@aria-label="Save"]')))
     mouse_click(driver, save_button)
     time.sleep(5)
+    try:
+        print("Looking for still checking popup")
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//h1[contains(text(),"still checking")]')))
+        print("Still checking popup found, clicking publish")
+        publish_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@aria-label="Publish"]')))
+        mouse_click(driver, publish_button)
+    except TimeoutException: 
+        print("No still checking popup found, continuing...")
     print("Upload completed")
 
 
@@ -143,6 +151,45 @@ def wait_for_video_publish(driver:webdriver.Chrome):
             pass
         print("Waiting for video to be published ...")
         time.sleep(5)
+
+def go_to_next_upload_card(driver:webdriver.Chrome)-> bool:
+    try:
+        next_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@aria-label="Next"]')))
+        mouse_click(driver, next_button)
+        time.sleep(.5)
+        return True
+    except TimeoutException:
+        return False
+
+def set_monetization(driver:webdriver.Chrome):
+    monetization_drop_down = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//ytcp-form-input-container[@label="Monetization"]//div[@id="child-input"]')))
+    mouse_click(driver, monetization_drop_down)
+    time.sleep(.5)
+    if turn_monetization_on:
+        monetization_option = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//tp-yt-paper-radio-button[@id="radio-on"]/div[@id="radioContainer"]')))
+    else:
+        monetization_option = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//tp-yt-paper-radio-button[@id="radio-off"]/div[@id="radioContainer"]')))
+    mouse_click(driver, monetization_option)
+    done_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@aria-label="Done"]')))
+    ActionChains(driver).scroll_to_element(done_button).perform()
+    mouse_click(driver, done_button)
+
+    go_to_next_upload_card(driver)
+    if turn_monetization_on:
+        set_ad_suitability(driver)
+    
+
+def set_ad_suitability(driver:webdriver.Chrome):
+    none_of_the_above_checkbox = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//div[@aria-label="None of the above"]')))
+    ActionChains(driver).scroll_to_element(none_of_the_above_checkbox).perform()
+    mouse_click(driver, none_of_the_above_checkbox)
+
+    submit_rating_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@aria-label="Submit rating"]')))
+    ActionChains(driver).scroll_to_element(submit_rating_button).perform()
+    mouse_click(driver, submit_rating_button)
+    time.sleep(.5)
+    go_to_next_upload_card(driver)
+
 
 def execute_upload_sequence(driver:webdriver.Chrome, video_file_path_absolute:str, thumbnail_file_path_absolute:Optional[str], full_sequence:bool=False):
     while True:
@@ -179,6 +226,20 @@ def execute_upload_sequence(driver:webdriver.Chrome, video_file_path_absolute:st
         mouse_click(driver, altered_content_radio_button)
         time.sleep(1)
 
+    # press next button
+    go_to_next_upload_card(driver)
+
+    # check for monetization
+    try:
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//h1[contains(text(),"Monetization")]')))
+        print("Monetization step detected")
+        set_monetization(driver)
+    except TimeoutException:
+        print("Monetization step not detected, skipping...")
+
+    while go_to_next_upload_card(driver):
+        print("Next upload card detected, continuing to next step...")
+        time.sleep(.5)
 
     if full_sequence:
         set_unlisted_visibility(driver)
@@ -251,9 +312,8 @@ def setup_upload_settings_on_youtube(driver:webdriver.Chrome) -> bool:
         return True
     except TimeoutException:
         print("Save button not clickable. No changes made.")
-        close_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//button[@aria-label="Close"]')))
-        mouse_click(driver, close_button)
-        return False
+        driver.get("https://studio.youtube.com/")
+        return True
 
 def main():
     print("Running startup sequence ...")
@@ -266,6 +326,7 @@ def main():
     ]
     # Initialize the driver
     driver = Driver(uc=True, headless=False, chromium_arg=chrome_options)
+    driver.maximize_window()
     execute_full_sequence = not setup_upload_settings_on_youtube(driver)
     driver.quit()
 
