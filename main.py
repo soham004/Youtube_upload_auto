@@ -15,6 +15,10 @@ import os
 import errno
 import traceback
 import msvcrt
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', filename='runtime.log', filemode='a')
 
 try:
     with open("config.json", "r") as f:
@@ -59,6 +63,7 @@ def start_video_upload(driver:webdriver.Chrome,video_file_path_absolute:str):
     time.sleep(.5)
     file_input = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, "//input[@type='file']")))
     file_input.send_keys(video_file_path_absolute)
+    logging.info(f"Video file {video_file_path_absolute} path sent for upload.")
     # Click on the file input element
     WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//button[@id='step-badge-0']")))
 
@@ -73,6 +78,7 @@ def enter_description(driver:webdriver.Chrome):
     # Click on the description box
     description_box = WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, "//*[contains(@aria-label, 'about your video')]")))
     mouse_click(driver, description_box)
+    logging.info("Description box clicked, ready to enter description.")
     time.sleep(.5)
 
     try:
@@ -233,9 +239,12 @@ def execute_upload_sequence(driver:webdriver.Chrome, video_file_path_absolute:st
     try:
         WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//h1[contains(text(),"Monetization")]')))
         print("Monetization step detected")
+        logging.info("Monetization step detected")
         set_monetization(driver)
+        logging.info("Monetization settings applied successfully.")
     except TimeoutException:
         print("Monetization step not detected, skipping...")
+        logging.info("Monetization step not detected, skipping...")
 
     while go_to_next_upload_card(driver):
         print("Next upload card detected, continuing to next step...")
@@ -312,6 +321,7 @@ def setup_upload_settings_on_youtube(driver:webdriver.Chrome) -> bool:
         return True
     except TimeoutException:
         print("Save button not clickable. No changes made.")
+        logging.info("Save button not clickable. No changes made.")
         driver.get("https://studio.youtube.com/")
         return True
 
@@ -341,8 +351,10 @@ def main():
     while True:
         wait_for_input(wait_time_in_mins * 60)
         video_files = [f for f in os.listdir(os.getcwd()) if (f.endswith(('.mp4', '.avi', '.mov', '.mkv','.mpg','.wmv')) and not is_file_open(f))]
+        logging.info(f"Found {video_files} video files in the current folder.")
         if not video_files:
             print("No video files found in the current folder.")
+            logging.info("No video files found in the current folder.")
             continue
         else:
             print(f"Found {len(video_files)} video files in the current folder.")
@@ -353,16 +365,17 @@ def main():
             driver.maximize_window()            
             for video_file in video_files:
                 upload_file = os.path.abspath(video_file)
-                try:
-                    execute_upload_sequence(driver, upload_file, thumbnail_file_path_absolute, full_sequence=execute_full_sequence)
-                    print(f"Video file {video_file} uploaded successfully.")
-                    os.remove(upload_file)
-                    print(f"Video file {video_file} deleted successfully.")
-                except Exception as e:
-                    traceback.print_exc()
+                execute_upload_sequence(driver, upload_file, thumbnail_file_path_absolute, full_sequence=execute_full_sequence)
+                print(f"Video file {video_file} uploaded successfully.")
+                logging.info(f"Video file {video_file} uploaded successfully.")
+                os.remove(upload_file)
+                print(f"Video file {video_file} deleted successfully.")
+                logging.info(f"Video file {video_file} deleted successfully.")
             driver.quit()
         except Exception as e:
             print(f"An error occurred: {e}")
+            logging.error(f"An error occurred: {e}")
+            logging.error(traceback.format_exc())
             print("Retrying with a new driver instance during next check...")
             traceback.print_exc()
             driver.quit()

@@ -1,4 +1,6 @@
 chrome_profile/
 downloaded_files/
+_internal/
+main.exe
 *.jpg
 *.mp4
