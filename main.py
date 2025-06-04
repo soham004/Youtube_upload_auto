@@ -65,7 +65,18 @@ def start_video_upload(driver:webdriver.Chrome,video_file_path_absolute:str):
     file_input.send_keys(video_file_path_absolute)
     logging.info(f"Video file {video_file_path_absolute} path sent for upload.")
     # Click on the file input element
-    WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//button[@id='step-badge-0']")))
+    WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "//button[@id='step-badge-0']")))
+    logging.info("step-badge-0 found")
+    time.sleep(2)
+    try:
+        driver.find_element(By.XPATH, '//div[contains(text(),"Daily upload limit reached")]')
+        print("Daily upload limit reached. Please try again later.")
+        logging.error("Daily upload limit reached. Please try again later.")
+        driver.quit()
+    except Exception as e:
+        print("Video upload started successfully.")
+        logging.info("Video upload started successfully.")
+        logging.info(traceback.format_exc())
 
 
 def enter_description(driver:webdriver.Chrome):
@@ -373,11 +384,10 @@ def main():
                 logging.info(f"Video file {video_file} deleted successfully.")
             driver.quit()
         except Exception as e:
-            print(f"An error occurred: {e}")
+            print(f"An error occurred")
             logging.error(f"An error occurred: {e}")
             logging.error(traceback.format_exc())
-            print("Retrying with a new driver instance during next check...")
-            traceback.print_exc()
+            print("Retrying with a new browser instance during next check...")
             driver.quit()
         print("All video files processed. Waiting for next check...")
 
