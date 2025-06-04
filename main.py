@@ -142,20 +142,18 @@ def save_video(driver:webdriver.Chrome):
 
 
 def wait_for_video_publish(driver:webdriver.Chrome):
+    print_once = True
+    i=0
     while True:
         try:
-            driver.find_element(By.XPATH, "//h1[contains(text(),'Video published')]")
-            print("Video published")
-            break
+            driver.find_element(By.XPATH, "//h1[contains(text(),'uploading') or contains(text(),'Uploading')]")
+            print(f"\rVideo still uploading (check no. {i})", end="\r")
+            i += 1
         except Exception as e:
-            pass
-        try:
-            driver.find_element(By.XPATH, "//h1[contains(text(),'Video processing')]")
-            print("Video processing started")
+            if print_once:
+                print("\nVideo upload completed")
+                print_once = False
             break
-        except Exception as e:
-            pass
-        print("Waiting for video to be published ...")
         time.sleep(5)
 
 def go_to_next_upload_card(driver:webdriver.Chrome)-> bool:
@@ -364,6 +362,9 @@ def main():
             driver = Driver(uc=True, headless=False, chromium_arg=chrome_options)
             driver.maximize_window()            
             for video_file in video_files:
+                print("")
+                print(f"Processing video file: {video_file}")
+                logging.info(f"Processing video file: {video_file}")
                 upload_file = os.path.abspath(video_file)
                 execute_upload_sequence(driver, upload_file, thumbnail_file_path_absolute, full_sequence=execute_full_sequence)
                 print(f"Video file {video_file} uploaded successfully.")
