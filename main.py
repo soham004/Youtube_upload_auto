@@ -138,7 +138,6 @@ def save_video(driver:webdriver.Chrome):
         mouse_click(driver, publish_button)
     except TimeoutException: 
         print("No still checking popup found, continuing...")
-    print("Upload completed")
 
 
 def wait_for_video_publish(driver:webdriver.Chrome):
