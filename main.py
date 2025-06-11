@@ -155,6 +155,7 @@ def wait_for_video_publish(driver:webdriver.Chrome):
     print_once = True
     i=0
     while True:
+        time.sleep(5)
         try:
             driver.find_element(By.XPATH, "//h1[contains(text(),'uploading') or contains(text(),'Uploading')]")
             print(f"\rVideo still uploading (check no. {i})", end="\r")
@@ -164,7 +165,6 @@ def wait_for_video_publish(driver:webdriver.Chrome):
                 print("\nVideo upload completed")
                 print_once = False
             break
-        time.sleep(5)
 
 def go_to_next_upload_card(driver:webdriver.Chrome)-> bool:
     try:
@@ -263,7 +263,7 @@ def execute_upload_sequence(driver:webdriver.Chrome, video_file_path_absolute:st
 
     time.sleep(1)
     save_video(driver)
-
+    time.sleep(20)
     wait_for_video_publish(driver)
 
 def wait_for_input(timeout_in_seconds):
